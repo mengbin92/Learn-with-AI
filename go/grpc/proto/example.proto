@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package example;
+
+option go_package = "github.com/example/proto";
+
+// 定义服务
+service ExampleService {
+  // 普通RPC调用
+  rpc SayHello(HelloRequest) returns (HelloResponse);
+
+  // 服务端流式RPC
+  rpc StreamMessages(StreamRequest) returns (stream StreamResponse);
+}
+
+// 请求消息
+message HelloRequest { string name = 1; }
+
+// 响应消息
+message HelloResponse { string message = 1; }
+
+// 流式请求
+message StreamRequest {
+  string message = 1;
+  int32 count = 2;
+}
+
+// 流式响应
+message StreamResponse {
+  string message = 1;
+  int32 index = 2;
+}
