@@ -19,6 +19,13 @@ static_resources:
                     - name: local_service
                       domains: ["*"]
                       routes:
+                        # WebSocket路由
+                        - match:
+                            path: "/ws"
+                          route:
+                            cluster: websocket_service
+                            timeout: 0s  # WebSocket连接不设置超时
+                        # gRPC-Web路由
                         - match:
                             prefix: "/"
                           route:
@@ -47,6 +54,7 @@ static_resources:
                   - upgrade_type: websocket
 
   clusters:
+    # gRPC服务集群
     - name: grpc_service
       connect_timeout: 10s
       type: LOGICAL_DNS
@@ -65,6 +73,21 @@ static_resources:
                     socket_address:
                       address: 127.0.0.1
                       port_value: 50051
+    
+    # WebSocket桥接服务集群
+    - name: websocket_service
+      connect_timeout: 10s
+      type: LOGICAL_DNS
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: websocket_service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 127.0.0.1
+                      port_value: 50052
 
 admin:
   address:

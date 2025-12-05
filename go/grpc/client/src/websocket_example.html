@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebSocket gRPC 客户端示例</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    .section {
+      margin: 30px 0;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    .result {
+      margin-top: 10px;
+      padding: 10px;
+      background: #f5f5f5;
+      border-radius: 3px;
+      min-height: 20px;
+    }
+    .stream-result {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .status {
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 3px;
+    }
+    .status.connected {
+      background: #d4edda;
+      color: #155724;
+    }
+    .status.disconnected {
+      background: #f8d7da;
+      color: #721c24;
+    }
+  </style>
+</head>
+<body>
+  <h1>WebSocket gRPC 客户端示例</h1>
+  
+  <div class="section">
+    <h2>连接状态</h2>
+    <div id="status" class="status disconnected">未连接</div>
+    <button id="connect-btn">连接</button>
+    <button id="disconnect-btn" disabled>断开</button>
+  </div>
+
+  <div class="section">
+    <h2>普通RPC调用</h2>
+    <input type="text" id="name-input" placeholder="输入名字" value="World" style="padding: 8px; width: 200px;">
+    <button id="hello-btn" disabled>调用 SayHello</button>
+    <div id="hello-result" class="result">等待调用...</div>
+  </div>
+
+  <div class="section">
+    <h2>流式RPC调用</h2>
+    <input type="text" id="stream-message-input" placeholder="消息内容" value="Hello from stream" style="padding: 8px; width: 200px;">
+    <input type="number" id="stream-count-input" placeholder="数量" value="5" style="padding: 8px; width: 100px;">
+    <button id="stream-btn" disabled>调用 StreamMessages</button>
+    <div id="stream-result" class="result stream-result">等待调用...</div>
+  </div>
+
+  <script type="module">
+    import { WebSocketGRPCClient } from './websocket_client.js';
+
+    const client = new WebSocketGRPCClient('ws://localhost:8080/ws');
+    let streamCancel = null;
+
+    const statusDiv = document.getElementById('status');
+    const connectBtn = document.getElementById('connect-btn');
+    const disconnectBtn = document.getElementById('disconnect-btn');
+    const helloBtn = document.getElementById('hello-btn');
+    const streamBtn = document.getElementById('stream-btn');
+
+    function updateStatus(connected) {
+      if (!statusDiv || !connectBtn || !disconnectBtn || !helloBtn || !streamBtn) return;
+      if (connected) {
+        statusDiv.textContent = '已连接';
+        statusDiv.className = 'status connected';
+        connectBtn.disabled = true;
+        disconnectBtn.disabled = false;
+        helloBtn.disabled = false;
+        streamBtn.disabled = false;
+      } else {
+        statusDiv.textContent = '未连接';
+        statusDiv.className = 'status disconnected';
+        connectBtn.disabled = false;
+        disconnectBtn.disabled = true;
+        helloBtn.disabled = true;
+        streamBtn.disabled = true;
+      }
+    }
+
+    connectBtn.addEventListener('click', async () => {
+      try {
+        await client.connect();
+        updateStatus(true);
+      } catch (error) {
+        alert('连接失败: ' + error.message);
+      }
+    });
+
+    disconnectBtn.addEventListener('click', () => {
+      if (streamCancel) {
+        streamCancel();
+        streamCancel = null;
+      }
+      client.disconnect();
+      updateStatus(false);
+    });
+
+    helloBtn.addEventListener('click', async () => {
+      const name = document.getElementById('name-input').value;
+      const resultDiv = document.getElementById('hello-result');
+      resultDiv.textContent = '调用中...';
+
+      try {
+        const response = await client.sayHello(name);
+        resultDiv.textContent = `响应: ${response.message}`;
+      } catch (error) {
+        resultDiv.textContent = `错误: ${error.message}`;
+        resultDiv.style.color = 'red';
+      }
+    });
+
+    streamBtn.addEventListener('click', () => {
+      const message = document.getElementById('stream-message-input').value;
+      const count = parseInt(document.getElementById('stream-count-input').value) || 5;
+      const resultDiv = document.getElementById('stream-result');
+      resultDiv.innerHTML = '<p>开始接收流式消息...</p>';
+
+      streamCancel = client.streamMessages(
+        message,
+        count,
+        (data) => {
+          const p = document.createElement('p');
+          p.textContent = `[${data.index}] ${data.message}`;
+          resultDiv.appendChild(p);
+        },
+        (error) => {
+          const p = document.createElement('p');
+          p.style.color = 'red';
+          p.textContent = `错误: ${error.message}`;
+          resultDiv.appendChild(p);
+        },
+        () => {
+          const p = document.createElement('p');
+          p.style.color = 'green';
+          p.textContent = '流式传输完成';
+          resultDiv.appendChild(p);
+          streamCancel = null;
+        }
+      );
+    });
+
+    updateStatus(false);
+  </script>
+</body>
+</html>
+

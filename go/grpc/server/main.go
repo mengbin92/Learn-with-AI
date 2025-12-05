@@ -4,13 +4,16 @@ import (
 	"context"
 	"log"
 	"net"
+	"net/http"
+	"sync"
 
 	pb "github.com/example/proto"
 	"google.golang.org/grpc"
 )
 
 const (
-	port = ":50051"
+	grpcPort    = ":50051"
+	wsPort      = ":50052"
 )
 
 // server 实现 ExampleService
@@ -53,16 +56,36 @@ func (s *server) StreamMessages(req *pb.StreamRequest, stream pb.ExampleService_
 }
 
 func main() {
-	lis, err := net.Listen("tcp", port)
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
+	var wg sync.WaitGroup
 
-	s := grpc.NewServer()
-	pb.RegisterExampleServiceServer(s, &server{})
+	// 启动gRPC服务器
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		lis, err := net.Listen("tcp", grpcPort)
+		if err != nil {
+			log.Fatalf("failed to listen: %v", err)
+		}
 
-	log.Printf("gRPC server listening on %s", port)
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
-	}
+		s := grpc.NewServer()
+		pb.RegisterExampleServiceServer(s, &server{})
+
+		log.Printf("gRPC server listening on %s", grpcPort)
+		if err := s.Serve(lis); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
+	}()
+
+	// 启动WebSocket桥接服务器
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		http.HandleFunc("/ws", websocketHandler)
+		log.Printf("WebSocket bridge server listening on %s", wsPort)
+		if err := http.ListenAndServe(wsPort, nil); err != nil {
+			log.Fatalf("WebSocket server failed: %v", err)
+		}
+	}()
+
+	wg.Wait()
 }

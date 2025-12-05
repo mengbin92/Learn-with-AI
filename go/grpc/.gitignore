@@ -32,3 +32,6 @@ client/src/proto/
 dist/
 build/
 
+.vscode/
+.cursor/
+.idea/
